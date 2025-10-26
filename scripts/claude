@@ -1,10 +1,9 @@
 #!/bin/bash
 
-docker run \
-  -it \
+docker compose \
+  -f "$(dirname $(realpath $0))/../docker-compose.yml" \
+  run \
   --rm \
-  -v ./:/top \
-  -v "$(dirname "$(realpath "$0")")/../claude-config:/home/node/.claude" \
-  claude-code-main \
+  main \
   claude \
   $@

@@ -10,7 +10,6 @@ services:
     stdin_open: true
     volumes:
       - .:/top
-      - /top/node_modules
-    ports:
-      - 9229:9229
-    command: "npm run start"
+      - ./settings/.claude.json:/home/node/.claude.json
+      - ./settings/.claude:/home/node/.claude
+    command: "claude"
