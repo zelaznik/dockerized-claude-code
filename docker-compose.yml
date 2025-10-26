@@ -6,8 +6,6 @@ services:
       args:
         UID: ${USER_ID:?required}
         GID: ${GROUP_ID:?required}
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY:?required}
     tty: true
     stdin_open: true
     volumes:
