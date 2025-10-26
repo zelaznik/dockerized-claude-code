@@ -1,0 +1,10 @@
+#!/bin/bash
+
+docker run \
+  -it \
+  --rm \
+  -v ./:/top \
+  -v "$(dirname "$(realpath "$0")")/../claude-config:/home/node/.claude" \
+  claude-code-main \
+  claude \
+  $@
