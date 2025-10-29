@@ -9,7 +9,6 @@ services:
     tty: true
     stdin_open: true
     volumes:
-      - .:/top
       - ./settings/.claude.json:/home/node/.claude.json
       - ./settings/.claude:/home/node/.claude
     command: "claude"

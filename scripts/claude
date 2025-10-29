@@ -4,6 +4,7 @@ docker compose \
   -f "$(dirname $(realpath $0))/../docker-compose.yml" \
   run \
   --rm \
+  -v "$(pwd):/top" \
   main \
   claude \
   $@
