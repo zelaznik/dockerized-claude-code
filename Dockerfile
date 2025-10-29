@@ -5,7 +5,6 @@ ARG UID
 ARG GID
 
 # Environment variables
-ENV NODE_PATH="/top/node_modules"
 WORKDIR /top
 
 # System dependencies
@@ -25,9 +24,4 @@ RUN npm install -g @anthropic-ai/claude-code@2.0.27
 
 USER node
 
-COPY --chown=node:node package*.json .
-
-RUN npm install
-
 COPY --chown=node:node . .
-
