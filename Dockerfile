@@ -20,7 +20,7 @@ RUN apt-get update && \
 RUN groupmod -g ${GID:?required} node && usermod -u ${UID:?required} -g ${GID:?required} node
 RUN chown -R node:node /top
 
-RUN npm install -g @anthropic-ai/claude-code@2.0.27
+RUN npm install -g @anthropic-ai/claude-code
 
 USER node
 
