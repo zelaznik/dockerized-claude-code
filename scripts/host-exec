@@ -5,8 +5,8 @@
  * Sends commands to the host-exec-daemon via Unix socket and
  * returns the output and exit code.
  *
- * Usage: host-exec <command> [args...]
- * Example: host-exec bundle exec rspec spec/models/user_spec.rb
+ * Usage: host-exec [ENV=value...] <command> [args...]
+ * Example: host-exec RAILS_ENV=test bundle exec rspec spec/models/user_spec.rb
  */
 
 const net = require('net');
@@ -14,18 +14,57 @@ const path = require('path');
 
 const SOCKET_PATH = '/tmp/host-exec.sock';
 
+/**
+ * Check if an argument looks like an environment variable assignment.
+ * Must be KEY=value where KEY starts with a letter and contains only
+ * alphanumeric characters and underscores.
+ */
+function isEnvVar(arg) {
+  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(arg);
+}
+
+/**
+ * Parse leading environment variable assignments from args.
+ * Returns { env: {KEY: value, ...}, cmd: [remaining, args] }
+ */
+function parseArgs(args) {
+  const env = {};
+  let i = 0;
+
+  while (i < args.length && isEnvVar(args[i])) {
+    const eqIndex = args[i].indexOf('=');
+    const key = args[i].substring(0, eqIndex);
+    const value = args[i].substring(eqIndex + 1);
+    env[key] = value;
+    i++;
+  }
+
+  return {
+    env: Object.keys(env).length > 0 ? env : null,
+    cmd: args.slice(i)
+  };
+}
+
 function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
-    console.error('Usage: host-exec <command> [args...]');
-    console.error('Example: host-exec bundle exec rspec spec/foo_spec.rb');
+    console.error('Usage: host-exec [ENV=value...] <command> [args...]');
+    console.error('Example: host-exec RAILS_ENV=test bundle exec rspec spec/foo_spec.rb');
+    process.exit(1);
+  }
+
+  const { env, cmd } = parseArgs(args);
+
+  if (cmd.length === 0) {
+    console.error('Error: No command specified (only environment variables provided)');
     process.exit(1);
   }
 
   const request = JSON.stringify({
-    cmd: args,
-    cwd: process.cwd()
+    cmd: cmd,
+    cwd: process.cwd(),
+    env: env
   });
 
   const client = net.createConnection(SOCKET_PATH, () => {

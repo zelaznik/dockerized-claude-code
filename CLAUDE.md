@@ -63,6 +63,10 @@ The `host-exec` feature allows running whitelisted commands on the host machine 
 ```bash
 host-exec bundle exec rspec spec/models/user_spec.rb
 host-exec npm test
+
+# With environment variables
+host-exec RAILS_ENV=test bundle exec rspec spec/models/user_spec.rb
+host-exec NODE_ENV=test CI=true npm test
 ```
 
 ### Security

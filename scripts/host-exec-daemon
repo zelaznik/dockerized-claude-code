@@ -70,6 +70,7 @@ def handle_request(data, allowed_prefixes):
 
     cmd = request.get("cmd")
     cwd = request.get("cwd")
+    request_env = request.get("env")
 
     if not cmd or not isinstance(cmd, list):
         return {"error": "Missing or invalid 'cmd' array", "exit_code": 1}
@@ -89,10 +90,19 @@ def handle_request(data, allowed_prefixes):
     if host_cwd and not os.path.isdir(host_cwd):
         return {"error": f"Working directory does not exist: {host_cwd}", "exit_code": 1}
 
+    # Build environment: start with host env, merge in request env
+    exec_env = None
+    if request_env and isinstance(request_env, dict):
+        exec_env = os.environ.copy()
+        for key, value in request_env.items():
+            if isinstance(key, str) and isinstance(value, str):
+                exec_env[key] = value
+
     try:
         result = subprocess.run(
             cmd,
             cwd=host_cwd,
+            env=exec_env,
             capture_output=True,
             shell=False,  # Critical: prevents shell injection
             timeout=300   # 5 minute timeout
