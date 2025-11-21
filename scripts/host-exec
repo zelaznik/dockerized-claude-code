@@ -1,0 +1,78 @@
+#!/usr/bin/env node
+/**
+ * Container-side shim for executing commands on the host.
+ *
+ * Sends commands to the host-exec-daemon via Unix socket and
+ * returns the output and exit code.
+ *
+ * Usage: host-exec <command> [args...]
+ * Example: host-exec bundle exec rspec spec/models/user_spec.rb
+ */
+
+const net = require('net');
+const path = require('path');
+
+const SOCKET_PATH = '/tmp/host-exec.sock';
+
+function main() {
+  const args = process.argv.slice(2);
+
+  if (args.length === 0) {
+    console.error('Usage: host-exec <command> [args...]');
+    console.error('Example: host-exec bundle exec rspec spec/foo_spec.rb');
+    process.exit(1);
+  }
+
+  const request = JSON.stringify({
+    cmd: args,
+    cwd: process.cwd()
+  });
+
+  const client = net.createConnection(SOCKET_PATH, () => {
+    client.write(request);
+    client.end();
+  });
+
+  let data = '';
+
+  client.on('data', (chunk) => {
+    data += chunk.toString();
+  });
+
+  client.on('end', () => {
+    try {
+      const response = JSON.parse(data);
+
+      if (response.error) {
+        console.error(`host-exec error: ${response.error}`);
+        process.exit(response.exit_code || 1);
+      }
+
+      if (response.stdout) {
+        process.stdout.write(response.stdout);
+      }
+      if (response.stderr) {
+        process.stderr.write(response.stderr);
+      }
+
+      process.exit(response.exit_code || 0);
+    } catch (e) {
+      console.error(`Failed to parse response: ${e.message}`);
+      console.error(`Raw response: ${data}`);
+      process.exit(1);
+    }
+  });
+
+  client.on('error', (err) => {
+    if (err.code === 'ENOENT') {
+      console.error('host-exec error: Socket not found. Is host-exec-daemon running on the host?');
+    } else if (err.code === 'ECONNREFUSED') {
+      console.error('host-exec error: Connection refused. Is host-exec-daemon running on the host?');
+    } else {
+      console.error(`host-exec error: ${err.message}`);
+    }
+    process.exit(1);
+  });
+}
+
+main();

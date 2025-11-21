@@ -10,6 +10,8 @@ services:
     stdin_open: true
     volumes:
       - claude_config:/home/node/.claude
+      - /tmp/host-exec.sock:/tmp/host-exec.sock
+      - ./scripts/host-exec:/usr/local/bin/host-exec:ro
     command: "claude"
 
 volumes:
