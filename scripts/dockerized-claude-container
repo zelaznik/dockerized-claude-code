@@ -1,0 +1,11 @@
+#!/bin/bash
+
+docker compose \
+  -f "$(dirname $(realpath $0))/../docker-compose.yml" \
+  run \
+  --rm \
+  -v "$(pwd):/top$(pwd)" \
+  -w /top$(pwd) \
+  main \
+  bash \
+  $@
