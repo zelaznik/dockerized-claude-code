@@ -29,3 +29,6 @@ USER node
 RUN mkdir -p /home/node/.claude
 
 COPY --chown=node:node . .
+COPY --chown=node:node entrypoint.sh /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
