@@ -10,9 +10,7 @@ services:
     stdin_open: true
     volumes:
       - claude_config:/home/node/.claude
-      - claude_json:/home/node/.claude.json
     command: "claude"
 
 volumes:
   claude_config:
-  claude_json:

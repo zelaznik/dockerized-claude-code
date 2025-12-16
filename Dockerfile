@@ -22,6 +22,11 @@ RUN chown -R node:node /top
 
 RUN npm install -g @anthropic-ai/claude-code
 
+COPY --chown=node:node entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 USER node
 
 COPY --chown=node:node . .
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
