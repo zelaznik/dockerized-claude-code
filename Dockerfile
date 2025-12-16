@@ -17,7 +17,8 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Match container user to host UID/GID
-RUN groupmod -g ${GID:?required} node && usermod -u ${UID:?required} -g ${GID:?required} node
+RUN if [ "$(id -g node)" != "${GID}" ]; then groupmod -g ${GID:?required} node; fi && \
+    if [ "$(id -u node)" != "${UID}" ]; then usermod -u ${UID:?required} -g ${GID:?required} node; fi
 RUN chown -R node:node /top
 
 RUN npm install -g @anthropic-ai/claude-code
