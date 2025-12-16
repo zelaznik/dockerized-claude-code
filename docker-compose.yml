@@ -4,8 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        UID: ${USER_ID:?required}
-        GID: ${GROUP_ID:?required}
+        UID: ${USER_ID:-1000}
+        GID: ${GROUP_ID:-1000}
     tty: true
     stdin_open: true
     volumes:
