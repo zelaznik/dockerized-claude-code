@@ -23,11 +23,9 @@ RUN chown -R node:node /top
 
 RUN npm install -g @anthropic-ai/claude-code
 
-COPY --chown=node:node entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
-
 USER node
 
-COPY --chown=node:node . .
+# Create .claude directory so volume inherits correct ownership
+RUN mkdir -p /home/node/.claude
 
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+COPY --chown=node:node . .
