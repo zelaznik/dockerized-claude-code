@@ -1,0 +1,117 @@
+#!/usr/bin/env node
+/**
+ * Container-side shim for executing commands on the host.
+ *
+ * Sends commands to the host-exec-daemon via Unix socket and
+ * returns the output and exit code.
+ *
+ * Usage: host-exec [ENV=value...] <command> [args...]
+ * Example: host-exec RAILS_ENV=test bundle exec rspec spec/models/user_spec.rb
+ */
+
+const net = require('net');
+const path = require('path');
+
+const SOCKET_PATH = '/tmp/host-exec.sock';
+
+/**
+ * Check if an argument looks like an environment variable assignment.
+ * Must be KEY=value where KEY starts with a letter and contains only
+ * alphanumeric characters and underscores.
+ */
+function isEnvVar(arg) {
+  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(arg);
+}
+
+/**
+ * Parse leading environment variable assignments from args.
+ * Returns { env: {KEY: value, ...}, cmd: [remaining, args] }
+ */
+function parseArgs(args) {
+  const env = {};
+  let i = 0;
+
+  while (i < args.length && isEnvVar(args[i])) {
+    const eqIndex = args[i].indexOf('=');
+    const key = args[i].substring(0, eqIndex);
+    const value = args[i].substring(eqIndex + 1);
+    env[key] = value;
+    i++;
+  }
+
+  return {
+    env: Object.keys(env).length > 0 ? env : null,
+    cmd: args.slice(i)
+  };
+}
+
+function main() {
+  const args = process.argv.slice(2);
+
+  if (args.length === 0) {
+    console.error('Usage: host-exec [ENV=value...] <command> [args...]');
+    console.error('Example: host-exec RAILS_ENV=test bundle exec rspec spec/foo_spec.rb');
+    process.exit(1);
+  }
+
+  const { env, cmd } = parseArgs(args);
+
+  if (cmd.length === 0) {
+    console.error('Error: No command specified (only environment variables provided)');
+    process.exit(1);
+  }
+
+  const request = JSON.stringify({
+    cmd: cmd,
+    cwd: process.cwd(),
+    env: env
+  });
+
+  const client = net.createConnection(SOCKET_PATH, () => {
+    client.write(request);
+    client.end();
+  });
+
+  let data = '';
+
+  client.on('data', (chunk) => {
+    data += chunk.toString();
+  });
+
+  client.on('end', () => {
+    try {
+      const response = JSON.parse(data);
+
+      if (response.error) {
+        console.error(`host-exec error: ${response.error}`);
+        process.exit(response.exit_code || 1);
+      }
+
+      if (response.stdout) {
+        process.stdout.write(response.stdout);
+      }
+      if (response.stderr) {
+        process.stderr.write(response.stderr);
+      }
+
+      process.exit(response.exit_code || 0);
+    } catch (e) {
+      console.error(`Failed to parse response: ${e.message}`);
+      console.error(`Raw response: ${data}`);
+      process.exit(1);
+    }
+  });
+
+  client.on('error', (err) => {
+    if (err.code === 'ENOENT') {
+      console.error('host-exec error: Socket not found. Is host-exec-daemon running on the host?');
+    } else if (err.code === 'ECONNREFUSED') {
+      console.error('host-exec error: Connection refused. Is host-exec-daemon running on the host?');
+    } else {
+      console.error(`host-exec error: ${err.message}`);
+    }
+    process.exit(1);
+  });
+}
+
+main();

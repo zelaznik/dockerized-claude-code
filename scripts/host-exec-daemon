@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""
+Host command execution daemon for Docker containers.
+
+Listens on a Unix socket and executes whitelisted commands on behalf of
+containerized processes. Commands are passed as arrays and executed with
+shell=False to prevent command injection.
+"""
+
+import json
+import os
+import signal
+import socket
+import subprocess
+import sys
+from pathlib import Path
+
+SOCKET_PATH = "/tmp/host-exec.sock"
+CONFIG_PATH = Path(__file__).parent.parent / "config" / "host-exec-whitelist.json"
+
+
+def load_whitelist():
+    """Load allowed command prefixes from config file."""
+    if not CONFIG_PATH.exists():
+        print(f"Error: Config file not found: {CONFIG_PATH}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(CONFIG_PATH) as f:
+        config = json.load(f)
+
+    return config.get("allowed_prefixes", [])
+
+
+def is_command_allowed(cmd, allowed_prefixes):
+    """
+    Check if command matches any allowed prefix.
+
+    The command must start with all elements of at least one prefix.
+    For example, prefix ["bundle", "exec", "rspec"] matches:
+      - ["bundle", "exec", "rspec"]
+      - ["bundle", "exec", "rspec", "spec/foo_spec.rb"]
+    But not:
+      - ["bundle", "exec"]
+      - ["bundle", "install"]
+    """
+    for prefix in allowed_prefixes:
+        if len(cmd) >= len(prefix) and cmd[:len(prefix)] == prefix:
+            return True
+    return False
+
+
+def translate_path(container_path):
+    """
+    Translate container path to host path.
+
+    Container paths are mounted as /top<host-path>, so /top/home/user/project
+    becomes /home/user/project on the host.
+    """
+    if container_path.startswith("/top"):
+        return container_path[4:]  # Remove "/top" prefix
+    return container_path
+
+
+def handle_request(data, allowed_prefixes):
+    """Process a command request and return the response."""
+    try:
+        request = json.loads(data)
+    except json.JSONDecodeError as e:
+        return {"error": f"Invalid JSON: {e}", "exit_code": 1}
+
+    cmd = request.get("cmd")
+    cwd = request.get("cwd")
+    request_env = request.get("env")
+
+    if not cmd or not isinstance(cmd, list):
+        return {"error": "Missing or invalid 'cmd' array", "exit_code": 1}
+
+    if not all(isinstance(arg, str) for arg in cmd):
+        return {"error": "All command arguments must be strings", "exit_code": 1}
+
+    if not is_command_allowed(cmd, allowed_prefixes):
+        return {
+            "error": f"Command not in whitelist: {' '.join(cmd[:3])}...",
+            "exit_code": 1
+        }
+
+    # Translate container path to host path
+    host_cwd = translate_path(cwd) if cwd else None
+
+    if host_cwd and not os.path.isdir(host_cwd):
+        return {"error": f"Working directory does not exist: {host_cwd}", "exit_code": 1}
+
+    # Build environment: start with host env, merge in request env
+    exec_env = None
+    if request_env and isinstance(request_env, dict):
+        exec_env = os.environ.copy()
+        for key, value in request_env.items():
+            if isinstance(key, str) and isinstance(value, str):
+                exec_env[key] = value
+
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=host_cwd,
+            env=exec_env,
+            capture_output=True,
+            shell=False,  # Critical: prevents shell injection
+            timeout=300   # 5 minute timeout
+        )
+        return {
+            "stdout": result.stdout.decode("utf-8", errors="replace"),
+            "stderr": result.stderr.decode("utf-8", errors="replace"),
+            "exit_code": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {"error": "Command timed out after 300 seconds", "exit_code": 124}
+    except FileNotFoundError:
+        return {"error": f"Command not found: {cmd[0]}", "exit_code": 127}
+    except Exception as e:
+        return {"error": f"Execution error: {e}", "exit_code": 1}
+
+
+def cleanup(signum=None, frame=None):
+    """Remove socket file on shutdown."""
+    if os.path.exists(SOCKET_PATH):
+        os.unlink(SOCKET_PATH)
+    sys.exit(0)
+
+
+def main():
+    allowed_prefixes = load_whitelist()
+    print(f"Loaded {len(allowed_prefixes)} allowed command prefixes")
+
+    # Clean up any existing socket
+    if os.path.exists(SOCKET_PATH):
+        os.unlink(SOCKET_PATH)
+
+    # Set up signal handlers for clean shutdown
+    signal.signal(signal.SIGINT, cleanup)
+    signal.signal(signal.SIGTERM, cleanup)
+
+    # Create and bind socket
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(SOCKET_PATH)
+
+    # Make socket accessible to container user
+    os.chmod(SOCKET_PATH, 0o777)
+
+    server.listen(5)
+    print(f"Listening on {SOCKET_PATH}")
+
+    try:
+        while True:
+            conn, _ = server.accept()
+            try:
+                # Read data (up to 1MB)
+                data = b""
+                while True:
+                    chunk = conn.recv(4096)
+                    if not chunk:
+                        break
+                    data += chunk
+                    if len(data) > 1024 * 1024:
+                        break
+
+                if data:
+                    response = handle_request(data.decode("utf-8"), allowed_prefixes)
+                    conn.sendall(json.dumps(response).encode("utf-8"))
+            finally:
+                conn.close()
+    finally:
+        cleanup()
+
+
+if __name__ == "__main__":
+    main()

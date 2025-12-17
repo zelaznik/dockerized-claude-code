@@ -1,0 +1,11 @@
+{
+  "allowed_prefixes": [
+    ["bundle", "exec", "rspec"],
+    ["bundle", "exec", "rails"],
+    ["bundle", "exec", "rake"],
+    ["npm", "test"],
+    ["npm", "run"],
+    ["yarn", "test"],
+    ["yarn", "run"]
+  ]
+}
