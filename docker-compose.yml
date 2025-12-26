@@ -9,7 +9,7 @@ services:
     tty: true
     stdin_open: true
     volumes:
-      - claude_config:/home/node/.claude
+      - claude_config:/home/ubuntu/.claude
     command: "claude"
 
 volumes:
