@@ -1,10 +1,15 @@
 #!/bin/bash
 
+# Generate a volume name based on the current directory path
+# This ensures each project gets its own isolated .claude settings
+VOLUME_NAME="claude_project_$(echo "$(pwd)" | md5sum | cut -d' ' -f1)"
+
 docker compose \
   -f "$(dirname $(realpath $0))/../docker-compose.yml" \
   run \
   --rm \
   -v "$(pwd):/top$(pwd)" \
+  -v "${VOLUME_NAME}:/top$(pwd)/.claude" \
   -w /top$(pwd) \
   main \
   claude \
